@@ -10,6 +10,7 @@
     "generate:og-image": "node scripts/generate-og-image.mjs",
     "prebuild": "npm run generate:sitemap && npm run generate:og-image",
     "build": "vite build",
+    "postbuild": "node scripts/prerender-pages.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
