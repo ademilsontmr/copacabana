@@ -38,7 +38,7 @@ function routeToFile(path) {
   return join(dist, path.slice(1), "index.html");
 }
 
-async function waitForServer(maxAttempts = 90) {
+async function waitForServer(maxAttempts = 60) {
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const res = await fetch(`${baseUrl}/`);
@@ -52,19 +52,40 @@ async function waitForServer(maxAttempts = 90) {
 }
 
 function startWrangler() {
-  return spawn("npx", ["wrangler", "pages", "dev", dist, "--port", String(port), "--log-level", "error"], {
-    cwd: root,
-    stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
-  });
+  return spawn(
+    "npx",
+    ["wrangler", "pages", "dev", dist, "--port", String(port), "--log-level", "error"],
+    {
+      cwd: root,
+      stdio: "ignore",
+      detached: true,
+      env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
+    },
+  );
 }
 
-const wrangler = startWrangler();
-let stderr = "";
+async function stopWrangler(proc) {
+  if (!proc?.pid) return;
 
-wrangler.stderr?.on("data", (chunk) => {
-  stderr += chunk.toString();
-});
+  const kill = (signal) => {
+    try {
+      process.kill(-proc.pid, signal);
+    } catch {
+      try {
+        proc.kill(signal);
+      } catch {
+        // processo já encerrado
+      }
+    }
+  };
+
+  kill("SIGTERM");
+  await new Promise((r) => setTimeout(r, 1000));
+  kill("SIGKILL");
+}
+
+let exitCode = 0;
+const wrangler = startWrangler();
 
 try {
   await waitForServer();
@@ -92,9 +113,13 @@ try {
     writeFileSync(routesPath, `${JSON.stringify(routes, null, 2)}\n`);
     console.log(`prerender: ${paths.length} rotas adicionadas ao _routes.json exclude`);
   }
+
+  console.log("prerender-pages: concluído");
 } catch (error) {
-  if (stderr) console.error(stderr);
-  throw error;
+  console.error("prerender-pages:", error);
+  exitCode = 1;
 } finally {
-  wrangler.kill("SIGTERM");
+  await stopWrangler(wrangler);
 }
+
+process.exit(exitCode);
