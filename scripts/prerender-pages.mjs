@@ -102,16 +102,30 @@ try {
     console.log(`prerender: ${path}`);
   }
 
+  const notFound = await fetch(`${baseUrl}/__404_prerender__`);
+  if (notFound.status === 404) {
+    writeFileSync(join(dist, "404.html"), await notFound.text());
+    console.log("prerender: 404.html");
+  }
+
   const routesPath = join(dist, "_routes.json");
   if (existsSync(routesPath)) {
     const routes = JSON.parse(readFileSync(routesPath, "utf8"));
     const exclude = new Set(routes.exclude ?? []);
+
+    // _routes.json usa caminhos de URL da requisição, não caminhos de arquivo.
     for (const path of paths) {
-      exclude.add(path === "/" ? "/index.html" : `${path}/index.html`);
+      exclude.add(path);
     }
+    exclude.add("/404.html");
+
     routes.exclude = [...exclude].sort();
+    // Com HTML estático gerado, o Worker não precisa rodar em nenhuma rota.
+    routes.include = [];
+
     writeFileSync(routesPath, `${JSON.stringify(routes, null, 2)}\n`);
-    console.log(`prerender: ${paths.length} rotas adicionadas ao _routes.json exclude`);
+    console.log("prerender: Worker desativado (include: [])");
+    console.log(`prerender: ${paths.length} URLs na lista exclude`);
   }
 
   console.log("prerender-pages: concluído");
