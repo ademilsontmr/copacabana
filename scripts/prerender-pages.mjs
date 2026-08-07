@@ -110,22 +110,17 @@ try {
 
   const routesPath = join(dist, "_routes.json");
   if (existsSync(routesPath)) {
-    const routes = JSON.parse(readFileSync(routesPath, "utf8"));
-    const exclude = new Set(routes.exclude ?? []);
-
-    // _routes.json usa caminhos de URL da requisição, não caminhos de arquivo.
-    for (const path of paths) {
-      exclude.add(path);
-    }
-    exclude.add("/404.html");
-
-    routes.exclude = [...exclude].sort();
-    // Com HTML estático gerado, o Worker não precisa rodar em nenhuma rota.
-    routes.include = [];
+    // Cloudflare exige ≥1 regra include; exclude tem prioridade sobre include.
+    // include/exclude em "/" satisfaz a validação sem invocar o Worker em nenhuma rota.
+    // Rotas não listadas em include (ex.: /blog/*) servem HTML estático direto da CDN.
+    const routes = {
+      version: 1,
+      include: ["/"],
+      exclude: ["/"],
+    };
 
     writeFileSync(routesPath, `${JSON.stringify(routes, null, 2)}\n`);
-    console.log("prerender: Worker desativado (include: [])");
-    console.log(`prerender: ${paths.length} URLs na lista exclude`);
+    console.log("prerender: _routes.json — Worker desativado (include/exclude em /)");
   }
 
   console.log("prerender-pages: concluído");
